@@ -6,7 +6,8 @@ from functools import partial
 from localite.flow.mrk import Receiver
 from typing import Tuple, Dict, Any, Union
 import json
-from time import sleep
+from time import sleep, time
+
 
 def pythonize_values(v: str) -> Union[bool, None, str]:
     "pythonize a dictionaries values"
@@ -48,6 +49,11 @@ class Coil:
     
     """
 
+    _time_since_last_request: Dict[str, Any]
+    _time_since_last_request = dict()
+    _request_cache: Dict[str, Any]
+    _request_cache = dict()
+
     def __init__(self, coil: int = 0, address: Tuple[str, int] = ("127.0.0.1", 6667)):
         host, port = address
         self._push_mrk = partial(push, fmt="mrk", host=host, port=port)
@@ -84,9 +90,21 @@ class Coil:
         return self.didt
 
     def request(self, msg: str) -> Any:
-        "add the coil id to the message and request a property from localite"
-        msg = json.dumps({"get": f"coil_{self.id}_{msg}"})
-        return self._request(msg)
+        """add the coil id to the message and request a property from localite
+        
+        
+        .. note::
+        
+           at least 1.5 seconds have to pass between queries, otherwise a cached
+           answer to the request will be returned. This was necessary to prevent
+           clogging and missed values from repeated requests.
+        """
+        if time() - self._time_since_last_request.get(msg, 0) > 2:
+            msg = json.dumps({"get": f"coil_{self.id}_{msg}"})
+            self._time_since_last_request[msg] = time()
+            print(msg)
+            self._request_cache[msg] = self._request(msg)
+        return self._request_cache[msg]
 
     def _request(self, msg: str) -> Any:
         "request a ready made property from localite"
@@ -157,7 +175,7 @@ class Coil:
         if index < 0:
             raise ValueError("Index must be higher than 0")
         msg = json.dumps({f"coil_{self._id}_target_index": index})
-        self._push_loc(msg=msg)        
+        self._push_loc(msg=msg)
         return self.request("target_index")
 
     @property

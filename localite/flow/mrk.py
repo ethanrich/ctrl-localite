@@ -34,6 +34,7 @@ class Buffer:
                 self.queue.task_done()
                 content.append(item)
             except queue.Empty:
+                print('Queue was empty')
                 return content
 
 
@@ -60,11 +61,18 @@ class Receiver(threading.Thread):
 
     def await_response(self, msg: str):
         key = expectation(msg)
-        while True:
+        t0 = time.time()
+        t1 = time.time()
+        while t1-t0 < 2:
+            t1 = time.time()
+            print('Awaiting response..')
             content = self.content
-            for item in content:
-                if key in item[0][0]:
-                    return json.loads(item[0][0]), item[1]
+            try:
+                for item in content:
+                    if key in item[0][0]:
+                        return json.loads(item[0][0]), item[1]
+            except:
+                print('Failed to execute')
             time.sleep(0.01)
 
     @property
